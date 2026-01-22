@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { getLoggedInPatient, getLoggedInUser, logout } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { priorAuthorizations, notifications, historicalPAs } from "@/lib/schema";
@@ -18,6 +19,22 @@ import {
   TrendingUp,
   Activity
 } from "lucide-react";
+
+const fallbackAvatar = (name: string) =>
+  `https://ui-avatars.com/api/?background=0D8ABC&color=fff&name=${encodeURIComponent(name)}`;
+
+async function getPatientAvatar(seed: string, name: string) {
+  try {
+    const res = await fetch(
+      `https://randomuser.me/api/?seed=${encodeURIComponent(seed)}&inc=picture&noinfo`,
+      { next: { revalidate: 86400 } }
+    );
+    const data = await res.json();
+    return data?.results?.[0]?.picture?.thumbnail || fallbackAvatar(name);
+  } catch {
+    return fallbackAvatar(name);
+  }
+}
 
 export default async function DashboardPage() {
   const patient = await getLoggedInPatient();
@@ -50,6 +67,8 @@ export default async function DashboardPage() {
     .from(historicalPAs)
     .where(eq(historicalPAs.insuranceProvider, patient.insuranceProvider || ""))
     .get();
+
+  const avatarUrl = await getPatientAvatar(patient.id, `${patient.firstName} ${patient.lastName}`);
 
   async function logoutAction() {
     "use server";
@@ -93,6 +112,13 @@ export default async function DashboardPage() {
             </button>
             <div className="h-6 w-px bg-slate-200 mx-2 hidden sm:block" />
             <div className="hidden sm:flex items-center gap-3">
+              <Image
+                src={avatarUrl}
+                alt={`${patient.firstName} ${patient.lastName}`}
+                width={36}
+                height={36}
+                className="w-9 h-9 rounded-full object-cover border border-slate-200"
+              />
               <div className="text-right">
                 <p className="text-sm font-medium text-slate-900">{patient.firstName} {patient.lastName}</p>
                 <p className="text-xs text-slate-500">{patient.insuranceProvider}</p>

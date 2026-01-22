@@ -78,7 +78,45 @@ function getDiagnosisCategory(code: string): string {
 }
 
 function getTreatmentInfo(code: string): { category: string; cost: number } {
-  return treatmentCategoryMap[code] || { category: "other", cost: 1000 };
+  const normalized = code.toUpperCase().trim();
+  const mapped = treatmentCategoryMap[normalized];
+  if (mapped) return mapped;
+
+  if (/^J\d+/.test(normalized) || /^Q\d+/.test(normalized) || /^C\d+/.test(normalized)) {
+    return { category: "medication", cost: 9000 };
+  }
+
+  if (/^\d{6,}$/.test(normalized)) {
+    return { category: "medication", cost: 4500 };
+  }
+
+  if (/^97\d{3}$/.test(normalized)) {
+    return { category: "therapy", cost: 200 };
+  }
+
+  if (/^(70|71|72|73|74|75|76|77|78|79)\d{3}$/.test(normalized)) {
+    return { category: "imaging", cost: 2200 };
+  }
+
+  if (/^8\d{4}$/.test(normalized)) {
+    return { category: "lab", cost: 250 };
+  }
+
+  if (/^\d{5}$/.test(normalized)) {
+    return { category: "procedure", cost: 6000 };
+  }
+
+  return { category: "other", cost: 1500 };
+}
+
+function calculateSmoothedRate(
+  approvedCount: number,
+  totalCount: number,
+  priorRate: number,
+  priorWeight: number
+): number {
+  if (totalCount <= 0) return priorRate;
+  return (approvedCount + priorRate * priorWeight) / (totalCount + priorWeight);
 }
 
 export function calculateRiskScore(input: RiskInput): RiskScoreResult {
@@ -92,7 +130,8 @@ export function calculateRiskScore(input: RiskInput): RiskScoreResult {
   const treatmentCategory = input.treatmentCategory || treatmentInfo.category;
   const treatmentCost = treatmentInfo.cost;
 
-  // Query historical data for this combination
+  const globalPriorRate = 0.7;
+
   const historicalData = db
     .select({
       totalCount: sql<number>`count(*)`,
@@ -108,19 +147,22 @@ export function calculateRiskScore(input: RiskInput): RiskScoreResult {
     )
     .get();
 
-  // Broader historical query for insurance provider
-  const insurerData = db
+  const combinedCategoryData = db
     .select({
       totalCount: sql<number>`count(*)`,
       approvedCount: sql<number>`sum(case when outcome = 'approved' then 1 else 0 end)`,
-      avgProcessingDays: sql<number>`avg(processing_days)`,
     })
     .from(historicalPAs)
-    .where(eq(historicalPAs.insuranceProvider, input.insuranceProvider))
+    .where(
+      and(
+        eq(historicalPAs.insuranceProvider, input.insuranceProvider),
+        eq(historicalPAs.diagnosisCategory, diagCategory),
+        eq(historicalPAs.treatmentCategory, treatmentCategory)
+      )
+    )
     .get();
 
-  // Category-level data
-  const categoryData = db
+  const diagnosisCategoryData = db
     .select({
       totalCount: sql<number>`count(*)`,
       approvedCount: sql<number>`sum(case when outcome = 'approved' then 1 else 0 end)`,
@@ -134,57 +176,173 @@ export function calculateRiskScore(input: RiskInput): RiskScoreResult {
     )
     .get();
 
-  // Calculate base approval rate from historical data
-  let baseRate = 0.65; // Default
-  let sampleSize = 0;
-  
-  if (historicalData && historicalData.totalCount > 0) {
-    baseRate = historicalData.approvedCount / historicalData.totalCount;
-    sampleSize = historicalData.totalCount;
-  } else if (categoryData && categoryData.totalCount > 0) {
-    baseRate = categoryData.approvedCount / categoryData.totalCount;
-    sampleSize = categoryData.totalCount;
-  } else if (insurerData && insurerData.totalCount > 0) {
-    baseRate = insurerData.approvedCount / insurerData.totalCount;
-    sampleSize = insurerData.totalCount;
+  const treatmentCategoryData = db
+    .select({
+      totalCount: sql<number>`count(*)`,
+      approvedCount: sql<number>`sum(case when outcome = 'approved' then 1 else 0 end)`,
+    })
+    .from(historicalPAs)
+    .where(
+      and(
+        eq(historicalPAs.insuranceProvider, input.insuranceProvider),
+        eq(historicalPAs.treatmentCategory, treatmentCategory)
+      )
+    )
+    .get();
+
+  const insurerData = db
+    .select({
+      totalCount: sql<number>`count(*)`,
+      approvedCount: sql<number>`sum(case when outcome = 'approved' then 1 else 0 end)`,
+      avgProcessingDays: sql<number>`avg(processing_days)`,
+    })
+    .from(historicalPAs)
+    .where(eq(historicalPAs.insuranceProvider, input.insuranceProvider))
+    .get();
+
+  const insurerRate = insurerData && insurerData.totalCount > 0
+    ? insurerData.approvedCount / insurerData.totalCount
+    : globalPriorRate;
+
+  const smoothedTreatmentRate = historicalData && historicalData.totalCount > 0
+    ? calculateSmoothedRate(
+        historicalData.approvedCount,
+        historicalData.totalCount,
+        insurerRate,
+        12
+      )
+    : null;
+
+  const smoothedCombinedRate = combinedCategoryData && combinedCategoryData.totalCount > 0
+    ? calculateSmoothedRate(
+        combinedCategoryData.approvedCount,
+        combinedCategoryData.totalCount,
+        insurerRate,
+        10
+      )
+    : null;
+
+  const smoothedDiagnosisRate = diagnosisCategoryData && diagnosisCategoryData.totalCount > 0
+    ? calculateSmoothedRate(
+        diagnosisCategoryData.approvedCount,
+        diagnosisCategoryData.totalCount,
+        insurerRate,
+        8
+      )
+    : null;
+
+  const smoothedTreatmentCategoryRate = treatmentCategoryData && treatmentCategoryData.totalCount > 0
+    ? calculateSmoothedRate(
+        treatmentCategoryData.approvedCount,
+        treatmentCategoryData.totalCount,
+        insurerRate,
+        8
+      )
+    : null;
+
+  const weightedRates: Array<{ rate: number; weight: number; sample: number }> = [];
+  if (smoothedTreatmentRate !== null && historicalData?.totalCount) {
+    weightedRates.push({
+      rate: smoothedTreatmentRate,
+      weight: Math.log10(historicalData.totalCount + 1) * 3,
+      sample: historicalData.totalCount,
+    });
   }
+  if (smoothedCombinedRate !== null && combinedCategoryData?.totalCount) {
+    weightedRates.push({
+      rate: smoothedCombinedRate,
+      weight: Math.log10(combinedCategoryData.totalCount + 1) * 2.2,
+      sample: combinedCategoryData.totalCount,
+    });
+  }
+  if (smoothedDiagnosisRate !== null && diagnosisCategoryData?.totalCount) {
+    weightedRates.push({
+      rate: smoothedDiagnosisRate,
+      weight: Math.log10(diagnosisCategoryData.totalCount + 1) * 1.8,
+      sample: diagnosisCategoryData.totalCount,
+    });
+  }
+  if (smoothedTreatmentCategoryRate !== null && treatmentCategoryData?.totalCount) {
+    weightedRates.push({
+      rate: smoothedTreatmentCategoryRate,
+      weight: Math.log10(treatmentCategoryData.totalCount + 1) * 1.6,
+      sample: treatmentCategoryData.totalCount,
+    });
+  }
+
+  weightedRates.push({ rate: insurerRate, weight: 1.4, sample: insurerData?.totalCount || 0 });
+  weightedRates.push({ rate: globalPriorRate, weight: 0.8, sample: 0 });
+
+  const weightSum = weightedRates.reduce((sum, item) => sum + item.weight, 0);
+  const baseRate = weightedRates.reduce((sum, item) => sum + item.rate * item.weight, 0) / weightSum;
+  const sampleSize = weightedRates.reduce((sum, item) => sum + item.sample, 0);
 
   let score = baseRate * 100;
 
-  // Factor 1: Diagnosis category adjustments
   if (diagCategory === "oncology") {
-    score += 8;
+    score += 6;
     positiveFactors.push("Oncology diagnosis - typically prioritized for approval");
   } else if (diagCategory === "cardiology") {
-    score += 5;
+    score += 4;
     positiveFactors.push("Cardiology diagnosis - often medically urgent");
-  } else if (diagCategory === "orthopedic" && treatmentCategory === "therapy") {
-    score -= 5;
-    negativeFactors.push("Conservative treatment often required before approval");
-    improvementSuggestions.push("Document completion of home exercise program if applicable");
+  } else if (diagCategory === "gastroenterology") {
+    score += 2;
+  } else if (diagCategory === "orthopedic") {
+    score -= 2;
+    negativeFactors.push("Orthopedic cases often require conservative therapy first");
+    improvementSuggestions.push("Document conservative therapy attempts and imaging");
+  } else if (diagCategory === "dermatology") {
+    score -= 2;
+    negativeFactors.push("Dermatology treatments may face stricter formulary checks");
+  } else if (diagCategory === "other") {
+    score -= 3;
+    negativeFactors.push("Limited historical data for this diagnosis category");
+    improvementSuggestions.push("Include supporting literature or specialty guidelines");
   }
 
-  // Factor 2: Treatment cost
-  if (treatmentCost > 30000) {
-    score -= 10;
-    negativeFactors.push("Very high-cost treatment - intensive review likely");
+  if (treatmentCost > 50000) {
+    score -= 14;
+    negativeFactors.push("Ultra high-cost treatment - intensive review likely");
     improvementSuggestions.push("Include detailed cost-benefit analysis");
     improvementSuggestions.push("Reference peer-reviewed studies on treatment efficacy");
-  } else if (treatmentCost > 10000) {
-    score -= 5;
-    negativeFactors.push("High-cost specialty treatment");
+  } else if (treatmentCost > 20000) {
+    score -= 10;
+    negativeFactors.push("Very high-cost treatment");
     improvementSuggestions.push("Include letter of medical necessity");
+  } else if (treatmentCost > 10000) {
+    score -= 6;
+    negativeFactors.push("High-cost specialty treatment");
+  } else if (treatmentCost > 5000) {
+    score -= 3;
   } else if (treatmentCost < 500) {
-    score += 5;
+    score += 6;
     positiveFactors.push("Low-cost intervention - generally favorable");
+  }
+
+  if (treatmentCategory === "imaging") {
+    score += 2;
+    positiveFactors.push("Imaging requests are commonly approved when criteria met");
+  } else if (treatmentCategory === "procedure") {
+    score -= 2;
+    negativeFactors.push("Procedural requests often require additional documentation");
+  } else if (treatmentCategory === "therapy") {
+    score -= 4;
+    negativeFactors.push("Therapy requests often require step therapy documentation");
+    improvementSuggestions.push("Document home exercise program and prior therapy visits");
+  } else if (treatmentCategory === "lab") {
+    score += 4;
+    positiveFactors.push("Low-complexity lab services are typically approved");
+  } else if (treatmentCategory === "other") {
+    score -= 3;
+    negativeFactors.push("Treatment category unclear - may require manual review");
   }
 
   // Factor 3: Documentation completeness
   if (input.hasCompleteDocs) {
-    score += 12;
+    score += 8;
     positiveFactors.push("Complete documentation submitted");
   } else {
-    score -= 15;
+    score -= 12;
     negativeFactors.push("Incomplete documentation");
     improvementSuggestions.push("Ensure all supporting documents are attached");
     improvementSuggestions.push("Include recent lab results and imaging reports");
@@ -192,15 +350,19 @@ export function calculateRiskScore(input: RiskInput): RiskScoreResult {
 
   // Factor 4: Prior treatment/step therapy
   if (input.hasPriorTreatment) {
-    score += 8;
+    score += 6;
     positiveFactors.push("Prior treatment attempts documented");
   } else {
     if (treatmentCategory === "medication" && treatmentCost > 5000) {
-      score -= 10;
-      negativeFactors.push("No prior treatment documented - step therapy may be required");
+      score -= 9;
+      negativeFactors.push("No prior treatment documented - step therapy likely required");
       improvementSuggestions.push("Document failure of first-line treatments");
-    } else if (treatmentCategory === "therapy") {
+    } else if (treatmentCategory === "procedure") {
       score -= 5;
+      negativeFactors.push("No conservative care documented before procedure");
+      improvementSuggestions.push("Document conservative therapy or imaging findings");
+    } else if (treatmentCategory === "therapy") {
+      score -= 4;
       negativeFactors.push("Conservative treatment history not documented");
       improvementSuggestions.push("Document previous conservative treatment attempts");
     }
@@ -208,20 +370,20 @@ export function calculateRiskScore(input: RiskInput): RiskScoreResult {
 
   // Factor 5: Urgency level
   if (input.urgencyLevel === "emergent") {
-    score += 10;
+    score += 6;
     positiveFactors.push("Emergent request - expedited review");
   } else if (input.urgencyLevel === "urgent") {
-    score += 5;
+    score += 3;
     positiveFactors.push("Urgent clinical need documented");
   }
 
   // Factor 6: Patient age considerations
   if (input.patientAge) {
-    if (input.patientAge >= 65 && diagCategory === "oncology") {
-      score += 3;
-      positiveFactors.push("Medicare-eligible age with oncology diagnosis");
+    if (input.patientAge >= 65 && (diagCategory === "oncology" || diagCategory === "cardiology")) {
+      score += 2;
+      positiveFactors.push("Senior patient with high-risk diagnosis");
     } else if (input.patientAge < 18) {
-      score += 5;
+      score += 3;
       positiveFactors.push("Pediatric patient - often prioritized");
     }
   }
@@ -236,9 +398,12 @@ export function calculateRiskScore(input: RiskInput): RiskScoreResult {
 
   // Calculate estimated processing days
   let estimatedDays = insurerData?.avgProcessingDays || 12;
-  if (input.urgencyLevel === "urgent") estimatedDays = Math.max(1, estimatedDays - 4);
-  if (input.urgencyLevel === "emergent") estimatedDays = Math.max(1, estimatedDays - 7);
-  if (!input.hasCompleteDocs) estimatedDays += 5;
+  if (historicalData?.avgProcessingDays) estimatedDays = historicalData.avgProcessingDays;
+  if (input.urgencyLevel === "urgent") estimatedDays = Math.max(1, estimatedDays - 3);
+  if (input.urgencyLevel === "emergent") estimatedDays = Math.max(1, estimatedDays - 6);
+  if (!input.hasCompleteDocs) estimatedDays += 4;
+  if (treatmentCost > 20000) estimatedDays += 3;
+  if (treatmentCategory === "procedure") estimatedDays += 2;
 
   return {
     score: Math.round(score),
