@@ -47,8 +47,8 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: #f8fafc;
+  --radius: 0.75rem;
+  --background: #ffffff;
   --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
@@ -58,9 +58,9 @@
   --primary-foreground: #ffffff;
   --secondary: #f1f5f9;
   --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
+  --muted: #f8fafc;
   --muted-foreground: #64748b;
-  --accent: #e0f2fe;
+  --accent: #f0f9ff;
   --accent-foreground: #0369a1;
   --destructive: #ef4444;
   --border: #e2e8f0;
@@ -83,14 +83,128 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply tracking-tight font-semibold;
+    @apply tracking-tight font-semibold text-slate-900;
+  }
+  h1 { @apply text-3xl md:text-4xl font-bold; }
+  h2 { @apply text-2xl font-semibold; }
+  h3 { @apply text-lg font-semibold; }
+}
+
+@layer components {
+  /* Premium Card Styles */
+  .card-elevated {
+    @apply bg-white rounded-xl border border-slate-200/60 shadow-sm;
+    @apply hover:shadow-md hover:border-slate-300/60 transition-all duration-200;
+  }
+  
+  .card-glass {
+    @apply bg-white/70 backdrop-blur-xl rounded-2xl border border-white/20;
+    @apply shadow-[0_8px_32px_rgba(0,0,0,0.08)];
+  }
+
+  /* Gradient Backgrounds */
+  .bg-gradient-mesh {
+    background: 
+      radial-gradient(at 40% 20%, rgba(14, 165, 233, 0.08) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, rgba(16, 185, 129, 0.06) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
+      radial-gradient(at 80% 100%, rgba(14, 165, 233, 0.05) 0px, transparent 50%),
+      linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  }
+
+  .bg-gradient-premium {
+    background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 50%, #0891b2 100%);
+  }
+
+  /* Status Pills */
+  .status-approved {
+    @apply bg-emerald-50 text-emerald-700 border border-emerald-200/60;
+  }
+  .status-denied {
+    @apply bg-red-50 text-red-700 border border-red-200/60;
+  }
+  .status-pending {
+    @apply bg-amber-50 text-amber-700 border border-amber-200/60;
+  }
+  .status-submitted {
+    @apply bg-sky-50 text-sky-700 border border-sky-200/60;
+  }
+
+  /* Button Variants */
+  .btn-primary {
+    @apply bg-sky-500 hover:bg-sky-600 text-white font-medium;
+    @apply shadow-sm shadow-sky-500/20 hover:shadow-md hover:shadow-sky-500/30;
+    @apply transition-all duration-200 active:scale-[0.98];
+  }
+
+  .btn-ghost {
+    @apply text-slate-600 hover:text-slate-900 hover:bg-slate-100;
+    @apply transition-all duration-200;
+  }
+
+  /* Navigation */
+  .nav-link {
+    @apply px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200;
+  }
+  .nav-link-active {
+    @apply bg-sky-50 text-sky-700;
+  }
+  .nav-link-inactive {
+    @apply text-slate-600 hover:text-slate-900 hover:bg-slate-50;
+  }
+
+  /* Stat Cards */
+  .stat-card {
+    @apply bg-white rounded-xl border border-slate-200/60 p-5;
+    @apply hover:shadow-md transition-all duration-200;
+  }
+
+  /* List Items */
+  .list-item-hover {
+    @apply hover:bg-slate-50/80 transition-colors duration-150 cursor-pointer;
+  }
+
+  /* Risk Score Colors */
+  .risk-high { @apply text-emerald-600; }
+  .risk-medium { @apply text-amber-600; }
+  .risk-low { @apply text-red-600; }
+
+  /* Animations */
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out forwards;
+  }
+
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .animate-pulse-soft {
+    animation: pulse-soft 2s ease-in-out infinite;
+  }
+
+  /* Skeleton Loading */
+  .skeleton {
+    @apply bg-slate-200 rounded animate-pulse;
+  }
+
+  /* Focus States */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:ring-offset-2;
   }
 }
 
@@ -98,28 +212,15 @@
   .text-balance {
     text-wrap: balance;
   }
-}
+  
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-sky-600 to-cyan-500;
+  }
 
-@layer components {
-  .card-hover {
-    @apply transition-all duration-200 hover:shadow-md hover:border-slate-300;
-  }
-  .btn-primary {
-    @apply bg-sky-500 hover:bg-sky-600 text-white shadow-sm transition-all duration-200;
-  }
-  .btn-secondary {
-    @apply bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm transition-all duration-200;
-  }
-  .stat-card {
-    @apply bg-white rounded-xl border border-slate-200 p-6 shadow-sm;
-  }
-  .page-header {
-    @apply bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-50;
-  }
-  .gradient-text {
-    @apply bg-gradient-to-r from-sky-600 to-cyan-500 bg-clip-text text-transparent;
-  }
-  .glass-card {
-    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-lg;
+  .shadow-elevated {
+    box-shadow: 
+      0 0 0 1px rgba(0,0,0,0.03),
+      0 2px 4px rgba(0,0,0,0.05),
+      0 12px 24px rgba(0,0,0,0.05);
   }
 }

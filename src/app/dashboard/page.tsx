@@ -5,7 +5,6 @@ import { db } from "@/lib/db";
 import { priorAuthorizations, notifications, historicalPAs } from "@/lib/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { 
   LogOut, 
   ChevronRight, 
@@ -16,16 +15,15 @@ import {
   CheckCircle2, 
   XCircle,
   Shield,
-  TrendingUp
+  TrendingUp,
+  Activity
 } from "lucide-react";
 
 export default async function DashboardPage() {
   const patient = await getLoggedInPatient();
   const user = await getLoggedInUser();
 
-  if (!patient || !user) {
-    redirect("/login");
-  }
+  if (!patient || !user) redirect("/login");
 
   const pas = db
     .select()
@@ -43,16 +41,9 @@ export default async function DashboardPage() {
     .all();
 
   const unreadCount = patientNotifications.filter((n) => n.read === 0).length;
-
-  const pendingCount = pas.filter(
-    (pa) => pa.status === "submitted" || pa.status === "under_review"
-  ).length;
-  const approvedCount = pas.filter(
-    (pa) => pa.status === "complete" && pa.statusDetail === "approved"
-  ).length;
-  const deniedCount = pas.filter(
-    (pa) => pa.status === "complete" && pa.statusDetail === "denied"
-  ).length;
+  const pendingCount = pas.filter((pa) => pa.status === "submitted" || pa.status === "under_review").length;
+  const approvedCount = pas.filter((pa) => pa.status === "complete" && pa.statusDetail === "approved").length;
+  const deniedCount = pas.filter((pa) => pa.status === "complete" && pa.statusDetail === "denied").length;
 
   const insurerAvgTime = db
     .select({ avgDays: sql<number>`round(avg(processing_days), 0)` })
@@ -68,155 +59,140 @@ export default async function DashboardPage() {
 
   const getStatusConfig = (status: string, detail: string | null) => {
     if (status === "complete" && detail === "approved")
-      return { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", icon: CheckCircle2, label: "Approved" };
+      return { bg: "bg-emerald-50", text: "text-emerald-700", icon: CheckCircle2, iconColor: "text-emerald-500", label: "Approved" };
     if (status === "complete" && detail === "denied")
-      return { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", icon: XCircle, label: "Denied" };
+      return { bg: "bg-red-50", text: "text-red-700", icon: XCircle, iconColor: "text-red-500", label: "Denied" };
     if (status === "under_review")
-      return { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", icon: Clock, label: "Under Review" };
-    return { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200", icon: FileText, label: "Submitted" };
+      return { bg: "bg-amber-50", text: "text-amber-700", icon: Clock, iconColor: "text-amber-500", label: "Under Review" };
+    return { bg: "bg-sky-50", text: "text-sky-700", icon: FileText, iconColor: "text-sky-500", label: "Submitted" };
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30">
+    <div className="min-h-screen bg-slate-50/50">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-8">
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-cyan-500 flex items-center justify-center">
+            <Link href="/dashboard" className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gradient-premium flex items-center justify-center">
                 <Shield className="w-4 h-4 text-white" />
               </div>
-              <span className="text-lg font-bold text-slate-900">ClearPath</span>
+              <span className="text-lg font-bold text-slate-900 hidden sm:inline">ClearPath</span>
             </Link>
             <nav className="hidden md:flex items-center gap-1">
-              <Link href="/dashboard" className="px-3 py-2 text-sm font-medium text-sky-600 bg-sky-50 rounded-lg">
-                Dashboard
-              </Link>
-              <Link href="/resources" className="px-3 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-                Resources
-              </Link>
+              <Link href="/dashboard" className="nav-link nav-link-active">Dashboard</Link>
+              <Link href="/resources" className="nav-link nav-link-inactive">Resources</Link>
             </nav>
           </div>
-          <div className="flex items-center gap-4">
-            <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+          <div className="flex items-center gap-2">
+            <button className="relative p-2.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors">
               <Bell className="w-5 h-5" />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-sky-500 rounded-full"></span>
+                <span className="absolute top-2 right-2 w-2 h-2 bg-sky-500 rounded-full ring-2 ring-white" />
               )}
             </button>
-            <div className="hidden sm:flex items-center gap-3 pl-4 border-l border-slate-200">
+            <div className="h-6 w-px bg-slate-200 mx-2 hidden sm:block" />
+            <div className="hidden sm:flex items-center gap-3">
               <div className="text-right">
                 <p className="text-sm font-medium text-slate-900">{patient.firstName} {patient.lastName}</p>
                 <p className="text-xs text-slate-500">{patient.insuranceProvider}</p>
               </div>
-              <form action={logoutAction}>
-                <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-700">
-                  <LogOut className="w-4 h-4" />
-                </Button>
-              </form>
             </div>
+            <form action={logoutAction}>
+              <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-600">
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </form>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        {/* Welcome Section */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        {/* Welcome Banner */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">
-            Welcome back, {patient.firstName}
-          </h1>
-          <p className="text-slate-500 mt-1">Track your prior authorization requests</p>
+          <h1 className="text-2xl font-bold text-slate-900">Welcome back, {patient.firstName}</h1>
+          <p className="text-slate-500 mt-1">Track and manage your prior authorization requests</p>
         </div>
 
-        {/* Stats Grid */}
+        {/* Stats Row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-slate-600" />
+          {[
+            { label: "Total Requests", value: pas.length, icon: FileText, color: "slate" },
+            { label: "Pending", value: pendingCount, icon: Clock, color: "amber" },
+            { label: "Approved", value: approvedCount, icon: CheckCircle2, color: "emerald" },
+            { label: "Denied", value: deniedCount, icon: XCircle, color: "red" },
+          ].map((stat) => (
+            <div key={stat.label} className="stat-card group">
+              <div className="flex items-start justify-between">
+                <div className={`w-10 h-10 rounded-xl bg-${stat.color}-100 flex items-center justify-center`}>
+                  <stat.icon className={`w-5 h-5 text-${stat.color}-600`} />
+                </div>
+                <span className={`text-2xl font-bold ${stat.color === 'slate' ? 'text-slate-900' : `text-${stat.color}-600`}`}>
+                  {stat.value}
+                </span>
               </div>
-              <span className="text-2xl font-bold text-slate-900">{pas.length}</span>
+              <p className="text-sm text-slate-500 mt-3">{stat.label}</p>
             </div>
-            <p className="text-sm text-slate-500">Total Requests</p>
-          </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-amber-600" />
-              </div>
-              <span className="text-2xl font-bold text-amber-600">{pendingCount}</span>
-            </div>
-            <p className="text-sm text-slate-500">Pending</p>
-          </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              </div>
-              <span className="text-2xl font-bold text-emerald-600">{approvedCount}</span>
-            </div>
-            <p className="text-sm text-slate-500">Approved</p>
-          </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-                <XCircle className="w-5 h-5 text-red-600" />
-              </div>
-              <span className="text-2xl font-bold text-red-600">{deniedCount}</span>
-            </div>
-            <p className="text-sm text-slate-500">Denied</p>
-          </div>
+          ))}
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* PA List */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="font-semibold text-slate-900">Your Authorizations</h2>
-                <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-                  {pas.length} total
-                </span>
+          {/* Main Content - PA List */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="card-elevated overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h2 className="font-semibold text-slate-900">Your Authorizations</h2>
+                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-medium">
+                    {pas.length}
+                  </span>
+                </div>
               </div>
+              
               {pas.length === 0 ? (
                 <div className="p-12 text-center">
-                  <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
                     <FileText className="w-8 h-8 text-slate-400" />
                   </div>
-                  <p className="text-slate-500 mb-2">No prior authorization requests yet</p>
-                  <p className="text-sm text-slate-400">Your requests will appear here</p>
+                  <h3 className="font-medium text-slate-900 mb-1">No requests yet</h3>
+                  <p className="text-sm text-slate-500">Your prior authorization requests will appear here</p>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {pas.map((pa) => {
+                  {pas.map((pa, index) => {
                     const config = getStatusConfig(pa.status, pa.statusDetail);
                     const Icon = config.icon;
                     return (
                       <Link
                         key={pa.id}
                         href={`/pa/${pa.id}`}
-                        className="flex items-center justify-between p-5 hover:bg-slate-50/50 transition-colors group"
+                        className="flex items-center gap-4 p-5 list-item-hover group"
+                        style={{ animationDelay: `${index * 50}ms` }}
                       >
-                        <div className="flex items-center gap-4 min-w-0">
-                          <div className={`w-10 h-10 rounded-lg ${config.bg} flex items-center justify-center flex-shrink-0`}>
-                            <Icon className={`w-5 h-5 ${config.text}`} />
-                          </div>
-                          <div className="min-w-0">
+                        <div className={`w-11 h-11 rounded-xl ${config.bg} flex items-center justify-center flex-shrink-0`}>
+                          <Icon className={`w-5 h-5 ${config.iconColor}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
                             <p className="font-medium text-slate-900 truncate">{pa.treatmentName}</p>
-                            <p className="text-sm text-slate-500">
-                              {pa.diagnosisCode} · {pa.submittedAt ? new Date(pa.submittedAt).toLocaleDateString() : "Draft"}
-                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-sm text-slate-500">{pa.diagnosisCode}</span>
+                            <span className="text-slate-300">·</span>
+                            <span className="text-sm text-slate-500">
+                              {pa.submittedAt ? new Date(pa.submittedAt).toLocaleDateString() : "Draft"}
+                            </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4 ml-4">
+                        <div className="flex items-center gap-4">
                           <div className="text-right hidden sm:block">
-                            <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${config.bg} ${config.text}`}>
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
                               {config.label}
                             </span>
                             {pa.riskScore && (
-                              <div className="flex items-center gap-1 mt-1 justify-end">
+                              <div className="flex items-center gap-1 mt-1.5 justify-end">
                                 <TrendingUp className="w-3 h-3 text-slate-400" />
-                                <span className={`text-sm font-medium ${
+                                <span className={`text-sm font-semibold ${
                                   pa.riskScore >= 75 ? "text-emerald-600" : pa.riskScore >= 50 ? "text-amber-600" : "text-red-600"
                                 }`}>
                                   {pa.riskScore}%
@@ -224,7 +200,7 @@ export default async function DashboardPage() {
                               </div>
                             )}
                           </div>
-                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-1 transition-all" />
+                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
                         </div>
                       </Link>
                     );
@@ -235,43 +211,50 @@ export default async function DashboardPage() {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-5">
             {/* Insurance Card */}
-            <div className="bg-gradient-to-br from-sky-500 to-cyan-500 rounded-xl p-6 text-white shadow-lg">
-              <p className="text-sky-100 text-sm mb-1">Insurance Provider</p>
-              <p className="text-xl font-bold mb-4">{patient.insuranceProvider}</p>
-              <div className="flex justify-between items-end">
+            <div className="rounded-2xl bg-gradient-premium p-5 text-white shadow-lg shadow-sky-500/20">
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <p className="text-sky-100 text-sm">Insurance Provider</p>
+                  <p className="text-xl font-bold mt-1">{patient.insuranceProvider}</p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sky-100 text-xs">Member ID</p>
-                  <p className="font-mono font-medium">{patient.insuranceId}</p>
+                  <p className="font-mono font-semibold mt-0.5">{patient.insuranceId}</p>
                 </div>
-                <div className="text-right">
+                <div>
                   <p className="text-sky-100 text-xs">Avg. Processing</p>
-                  <p className="font-bold">{insurerAvgTime?.avgDays || 12} days</p>
+                  <p className="font-semibold mt-0.5">{insurerAvgTime?.avgDays || 12} days</p>
                 </div>
               </div>
             </div>
 
             {/* Notifications */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="card-elevated overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Bell className="w-4 h-4 text-slate-400" />
                   <h3 className="font-semibold text-slate-900">Notifications</h3>
                 </div>
                 {unreadCount > 0 && (
-                  <span className="text-xs bg-sky-500 text-white px-2 py-0.5 rounded-full">
-                    {unreadCount} new
+                  <span className="px-2 py-0.5 rounded-full bg-sky-500 text-white text-xs font-medium">
+                    {unreadCount}
                   </span>
                 )}
               </div>
               {patientNotifications.length === 0 ? (
-                <div className="p-5 text-sm text-slate-500 text-center">No notifications</div>
+                <div className="p-5 text-center text-sm text-slate-500">No notifications</div>
               ) : (
                 <div className="divide-y divide-slate-100">
                   {patientNotifications.slice(0, 3).map((notif) => (
                     <div key={notif.id} className={`p-4 ${notif.read === 0 ? "bg-sky-50/50" : ""}`}>
-                      <p className="text-sm font-medium text-slate-900">{notif.title}</p>
+                      <p className="text-sm font-medium text-slate-900 line-clamp-1">{notif.title}</p>
                       <p className="text-xs text-slate-500 mt-1 line-clamp-2">{notif.message}</p>
                     </div>
                   ))}
@@ -279,20 +262,32 @@ export default async function DashboardPage() {
               )}
             </div>
 
-            {/* Help Link */}
-            <Link
-              href="/resources"
-              className="flex items-center gap-4 bg-white rounded-xl border border-slate-200 p-5 hover:border-sky-300 hover:shadow-md transition-all group"
-            >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center">
-                <HelpCircle className="w-6 h-6 text-violet-600" />
+            {/* Quick Links */}
+            <div className="space-y-2">
+              <Link href="/resources" className="card-elevated flex items-center gap-4 p-4 group">
+                <div className="w-11 h-11 rounded-xl bg-violet-100 flex items-center justify-center">
+                  <HelpCircle className="w-5 h-5 text-violet-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-slate-900">Help & Resources</p>
+                  <p className="text-sm text-slate-500">Guides, FAQs, and support</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-violet-500 group-hover:translate-x-0.5 transition-all" />
+              </Link>
+            </div>
+
+            {/* Tip Card */}
+            <div className="rounded-xl bg-amber-50 border border-amber-200/60 p-4">
+              <div className="flex items-start gap-3">
+                <Activity className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-amber-900">Did you know?</p>
+                  <p className="text-sm text-amber-700 mt-1">
+                    You can appeal denied PAs within 180 days. Check our Resources section for a step-by-step guide.
+                  </p>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="font-semibold text-slate-900">Need help?</p>
-                <p className="text-sm text-slate-500">View guides & resources</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-violet-500 group-hover:translate-x-1 transition-all" />
-            </Link>
+            </div>
           </div>
         </div>
       </main>
