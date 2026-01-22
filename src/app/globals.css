@@ -47,38 +47,38 @@
 }
 
 :root {
-  --radius: 0.5rem;
-  --background: #fafafa;
-  --foreground: #171717;
+  --radius: 0.625rem;
+  --background: #f8fafc;
+  --foreground: #0f172a;
   --card: #ffffff;
-  --card-foreground: #171717;
+  --card-foreground: #0f172a;
   --popover: #ffffff;
-  --popover-foreground: #171717;
-  --primary: #0f172a;
-  --primary-foreground: #f8fafc;
+  --popover-foreground: #0f172a;
+  --primary: #0ea5e9;
+  --primary-foreground: #ffffff;
   --secondary: #f1f5f9;
   --secondary-foreground: #0f172a;
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
-  --destructive: #dc2626;
+  --accent: #e0f2fe;
+  --accent-foreground: #0369a1;
+  --destructive: #ef4444;
   --border: #e2e8f0;
   --input: #e2e8f0;
-  --ring: #94a3b8;
-  --chart-1: #2563eb;
-  --chart-2: #16a34a;
-  --chart-3: #ea580c;
+  --ring: #0ea5e9;
+  --chart-1: #0ea5e9;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
   --chart-4: #8b5cf6;
-  --chart-5: #06b6d4;
+  --chart-5: #ec4899;
   --sidebar: #ffffff;
-  --sidebar-foreground: #171717;
-  --sidebar-primary: #0f172a;
-  --sidebar-primary-foreground: #f8fafc;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #0ea5e9;
+  --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f1f5f9;
   --sidebar-accent-foreground: #0f172a;
   --sidebar-border: #e2e8f0;
-  --sidebar-ring: #94a3b8;
+  --sidebar-ring: #0ea5e9;
 }
 
 @layer base {
@@ -86,16 +86,40 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply tracking-tight;
+    @apply tracking-tight font-semibold;
   }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@layer components {
+  .card-hover {
+    @apply transition-all duration-200 hover:shadow-md hover:border-slate-300;
+  }
+  .btn-primary {
+    @apply bg-sky-500 hover:bg-sky-600 text-white shadow-sm transition-all duration-200;
+  }
+  .btn-secondary {
+    @apply bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm transition-all duration-200;
+  }
+  .stat-card {
+    @apply bg-white rounded-xl border border-slate-200 p-6 shadow-sm;
+  }
+  .page-header {
+    @apply bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-50;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-sky-600 to-cyan-500 bg-clip-text text-transparent;
+  }
+  .glass-card {
+    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-lg;
   }
 }
